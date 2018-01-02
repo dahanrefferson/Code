@@ -1,0 +1,129 @@
+#include <Wire.h>
+#include <LCD.h>
+#include <LiquidCrystal_I2C.h>
+#include <Keypad.h>
+
+#define I2C_ADDR    0x3F // <<----- Add your address here.  Find it from I2C Scanner
+#define BACKLIGHT_PIN     3
+#define En_pin  2
+#define Rw_pin  1
+#define Rs_pin  0
+#define D4_pin  4
+#define D5_pin  5
+#define D6_pin  6
+#define D7_pin  7
+
+
+char locker_number[2]; // stores the number from keypad input
+int x = 0; // index for newNum array
+int keyposition = 0;
+
+int setMode = 0; // determines wheter write/read state.
+int switchMode = 0; // determines different panels
+int i = 0; // setting the position of lcd cursor
+int ledState = 0;
+
+char lock;
+int switchmode = 0; // for panel display
+
+
+
+//Keypad
+char key;
+const byte ROWS = 4; //four rows
+const byte COLS = 4; //four columns
+char keys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+byte rowPins[ROWS] = {5, 4, 3, 2}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {9, 8, 7, 6}; //connect to the column pinouts of the keypad
+
+LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);// LCD DISPLAY
+Keypad keypress = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );// for KEY PAD
+
+
+void setup(){
+  Serial.begin(9600);
+  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+  lcd.setBacklight(HIGH);
+  lcd.begin(16,2);
+  homedisplay();
+  
+}
+
+void homedisplay(){
+ lcd.clear();
+ lcd.home (); // go home
+ lcd.print("AUTOMATED LOCKER");
+ lcd.setCursor(0,1);
+ lcd.print("A-Dposit B-Claim");
+
+ key = keypress.getKey();
+  if(key){
+    Serial.print(key);
+  }
+  if(Serial.available() > 0){
+      char option = Serial.read();
+        if(option == 'A'){
+          lcd.clear();
+          switchmode = 1; // deposit
+          panel();
+        }
+        if(option == 'B'){
+          lcd.clear();
+          switchmode = 2; // claim
+          panel();
+        }
+        if(option == 'D'){
+          lcd.clear();
+          switchmode = 3; // Admin
+          panel();
+        }
+        else{
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.print("Invalid Option");
+          delay(2000);
+          homedisplay(); // call the home display
+        }
+    }
+}
+
+void panel(){
+  
+  switch(switchMode){
+    //Main Panel
+    case 1:
+      // once I pressed A it goes right here but I need to create a new input array but then it doesn't work
+      lcd.setCursor(0,0);
+      lcd.print("Choose Locker  ");
+      lcd.setCursor(0,1);
+      lcd.print("Number: ");
+      lock = keypress.getKey();
+      
+    break;
+    //Main Panel
+    case 2:
+      lcd.setCursor(0,0);
+      lcd.print("Scan Your Finger");
+      lcd.setCursor(0,1);
+      lcd.print("To open ur Locker");
+    break;
+    //Cancel Transaction
+  
+    //Admin
+    case 3:
+      lcd.setCursor(0,0);
+      lcd.print("Admin Password");
+    break;
+    
+  }
+}
+
+void loop(){
+  
+ 
+}
