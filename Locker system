@@ -1,18 +1,12 @@
-// GSM MODULE
-#include "SIM900.h"
-#include <SoftwareSerial.h>
-
 // FPS
 #include "FPS_GT511C3.h"
-#include "SoftwareSerial.h"
+//#include "SoftwareSerial.h"
 
-// LCD AND KEYPAD
 #include <Wire.h>
 #include <LCD.h>
 #include <LiquidCrystal_I2C.h>
 #include <Keypad.h>
 
-// FOR LCD DISPLAY
 #define I2C_ADDR    0x3F // <<----- Add your address here.  Find it from I2C Scanner
 #define BACKLIGHT_PIN     3
 #define En_pin  2
@@ -23,21 +17,15 @@
 #define D6_pin  6
 #define D7_pin  7
 
-//If you want to use the Arduino functions to manage SMS, uncomment the lines below.
-#include "sms.h"
-SMSGSM sms;
 
-// GSM MODULE
-int numdata;
-boolean started=false;
-char smsbuffer[160];
-char n[20];
 
-// START COIN ACCEPTOR
+//Coin Identifier by craynerd
+//Reference: https://www.youtube.com/watch?v=f4GhBp9PUfY
+ 
 volatile byte CoinPulseCount = 0;
 byte NewCoinInserted;
 byte Command = 0;
-int OpticalCountPin = 18;
+int OpticalCountPin = 2;
 volatile unsigned long PulseTime;
 float CurrentCredit;
 float NewCurrentCredit;
@@ -47,71 +35,74 @@ float Remaining;
 String OnePulse = "P1.00";
 String FivePulses = "P5.00";
 String TenPulses = "P10.00";
-// END FOR COIN ACCEPTOR
 
-// RELAY MODULE
-int in1 = 24, in2=26, in3=28, in4=30; //relay module
+int in3 = 28;
+int in1 = 24;
+int in4 = 30;
 
 // FOR FPS 
 // FPS (TX) is connected to pin 10 (Arduino's Software RX)
 // FPS (RX) is connected through a converter to pin 11 (Arduino's Software TX)
-FPS_GT511C3 fps(10, 11); // (Arduino SS_RX = pin 10, Arduino SS_TX = pin 11)
+FPS_GT511C3 fps(18, 19); // (Arduino SS_RX = pin 10, Arduino SS_TX = pin 11)
 
-// FOR LCD DISPLAY
+//FOR LCD DISPLAY
 LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);// LCD DISPLAY
 
-void setup()
-{
-  //relay module
-  pinMode(in4, OUTPUT);
-  pinMode(in1, OUTPUT);
-  pinMode(in2, OUTPUT);
-  pinMode(in3, OUTPUT);
-  pinMode(OpticalCountPin, INPUT_PULLUP);
-  
-  
-  
-  digitalWrite(in4, LOW);//fps
-  digitalWrite(in1, HIGH);// locker 1
-  digitalWrite(in2, HIGH);// locker 1
-  digitalWrite(in3, HIGH);// coin acceptor
-  
-   
-
-  
-  Serial.begin(9600); //set up Arduino's hardware serial UART
-  
-  // GSM MODULE
-  Serial.println("GSM Shield testing."); // GSM 
+void showCredit(){
+  NewCurrentCredit = CurrentCredit + NewCurrentCredit;
+  Payment = 20;
+  Remaining = Payment - NewCurrentCredit;
+  Serial.print("Total Credit: P");
+  Serial.println(NewCurrentCredit);
+  lcd.begin(16,2);
+  lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Searching of Network");
-  //Start configuration of shield with baudrate.
-  //For http uses is raccomanded to use 4800 or slower.
-  if (gsm.begin(2400)){
-    Serial.println("\nstatus=READY");
-    started=true;  
+  lcd.print("Credit: P");
+  lcd.setCursor(10,0);
+  lcd.print(NewCurrentCredit);
+  lcd.setCursor(0,1);
+  lcd.print("Remaining: P");
+  lcd.setCursor(13,1);
+  lcd.print(Remaining);
+  if(NewCurrentCredit >=20){
+    delay(1000);
+    NewCurrentCredit = 0;
+    locker1_open();
   }
-  else Serial.println("\nstatus=IDLE");
-
-
-  // FPS MODULE
-  delay(100);
-  fps.Open();         //send serial command to initialize fps
-  fps.SetLED(true);   //turn on LED so fps can see fingerprint
-   
-  // LCD DISPLAY
-  lcd.begin (16,2); //  <<----- My LCD was 16x2 defining 16 columns and 2 rows
-  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
-  lcd.setBacklight(HIGH);
-
- 
-  
-  //delete_fingerID();
-  Enroll();          //begin enrolling fingerprint - DEPOSIT
-  //identify_finger(); //for Claiming process
-  //insert_coin();
 }
+ 
+void setup(){
+        //relay module
+        pinMode(in3,OUTPUT);
+        pinMode(in1,OUTPUT);
+        pinMode(in4,OUTPUT);
 
+        digitalWrite(in4,HIGH);
+        digitalWrite(in3,LOW);
+        digitalWrite(in1,LOW);
+        
+        Serial.begin(9600);
+        Serial1.begin(9600);
+
+        lcd.begin (16,2); //  <<----- My LCD was 16x2 defining 16 columns and 2 rows
+  
+      // Switch on the backlight
+        lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+        lcd.setBacklight(HIGH);
+
+        // FPS MODULE
+        delay(100);
+        fps.Open();         //send serial command to initialize fps
+        fps.SetLED(true);   //turn on LED so fps can see fingerprint
+        
+        //cOIN ACCEPTOR
+        Serial.println();
+        pinMode(OpticalCountPin, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(OpticalCountPin), CoinPulse, RISING);
+
+        Enroll();
+        
+}
 
 void Enroll()
 {
@@ -186,13 +177,12 @@ void Enroll()
           lcd.setCursor(0,1);
           lcd.print("Successful");
           delay(3000);
-          digitalWrite(in4,HIGH);
-          digitalWrite(in3,LOW);
+          digitalWrite(in4,LOW);
+          digitalWrite(in3,HIGH);
           delay(2000);
-          attachInterrupt(digitalPinToInterrupt(OpticalCountPin), CoinPulse, RISING);
+          lcd.clear();
           insert_coin();
-         // locker1_open();
-         // locker2_open();
+     
         }
         else
         {
@@ -237,45 +227,15 @@ void Enroll()
 }
 
 
-void showCredit(){
-  NewCurrentCredit = CurrentCredit + NewCurrentCredit;
-  Payment = 20;
-  Remaining = Payment - NewCurrentCredit;
-  Serial.print("Total Credit: P");
-  Serial.println(NewCurrentCredit);
-  lcd.begin(16,2);
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("Credit: P");
-  lcd.setCursor(10,0);
-  lcd.print(NewCurrentCredit);
-  lcd.setCursor(0,1);
-  lcd.print("Remaining:P");
-  lcd.setCursor(12,1);
-  lcd.print(Remaining);
-  if(NewCurrentCredit >=20){
-    delay(1000);
-    lcd.clear();
-    lcd.setCursor(0,0);
-    lcd.print("Locker Open");
-    NewCurrentCredit = 0;
-    send_SMS();
-  }else{
-    insert_coin();
-  }
-}
-
 void insert_coin(){
-        
-        Serial.println("Insert Coin");
-        Serial.print(OpticalCountPin);
-        lcd.setCursor(0,0);
-        lcd.print("Insert Coin");
-        
-        
-  // Check for the Interrup Pin
-  // Check for Inserted Coin
-  if(CoinPulseCount > 0 && millis() - PulseTime > 200){
+      Serial.println("Input on Pin");
+      Serial.print(OpticalCountPin);
+      lcd.setCursor(0,0);
+      lcd.print("Insert Coin");
+}
+ 
+void loop(){
+        if(CoinPulseCount > 0 && millis() - PulseTime > 200){
                 NewCoinInserted = CoinPulseCount;
                 CoinPulseCount = 0;
         }
@@ -299,36 +259,23 @@ void insert_coin(){
                         NewCoinInserted = 0;
                         break;
         }
-  
- 
 }
-
+ 
 void CoinPulse(){
         CoinPulseCount ++;
         PulseTime = millis();
 }
 
-
-void send_SMS(){
-  if(started){
-    char phonenumber[]="+639391925552";
-    char message[] ="Deposited Locker";
-    //Enable this two lines if you want to send an SMS.
-    if (sms.SendSMS(phonenumber, message))
-      Serial.println("\nSMS sent OK");
-      locker1_open();
-  }
-}
-
-
 void locker1_open(){
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("Locker Opened");
-  lcd.setCursor(0,1);
-  lcd.print("Put your Items");
-  digitalWrite(in3, HIGH);
-  digitalWrite(in1, LOW);
-  delay(5000);
-  digitalWrite(in1, HIGH);
+    digitalWrite(in3,LOW);
+    digitalWrite(in1,HIGH);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Locker Open");
+    delay(5000);
+    digitalWrite(in1,LOW);
+    digitalWrite(in3,HIGH);
+    lcd.clear();
+    insert_coin();
+    
 }
